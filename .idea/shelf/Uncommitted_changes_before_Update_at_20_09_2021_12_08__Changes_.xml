@@ -1,0 +1,9 @@
+<changelist name="Uncommitted_changes_before_Update_at_20_09_2021_12_08_[Changes]" date="1632128903409" recycled="true" deleted="true">
+  <option name="PATH" value="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Update_at_20_09_2021_12_08_[Changes]/shelved.patch" />
+  <option name="DESCRIPTION" value="Uncommitted changes before Update at 20.09.2021 12:08 [Changes]" />
+  <binary>
+    <option name="BEFORE_PATH" />
+    <option name="AFTER_PATH" value="server/target/classes/ru/gb/les1/IoIntro.class" />
+    <option name="SHELVED_PATH" value="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Update_at_20_09_2021_12_08_[Changes]/IoIntro.class" />
+  </binary>
+</changelist>

@@ -1,9 +1,16 @@
-import java.io.*;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.Socket;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ResourceBundle;
+import java.util.stream.Collectors;
 
 import javafx.application.Platform;
 import javafx.event.ActionEvent;
@@ -11,15 +18,18 @@ import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.fxml.Initializable;
 import javafx.scene.Scene;
-import javafx.scene.control.Alert;
-import javafx.scene.control.ButtonType;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TextField;
+import javafx.stage.Stage;
 import lombok.extern.slf4j.Slf4j;
 
 
 @Slf4j
 public class Controller implements Initializable {
+
+    private static String APP_DIR = "client/Files";
+    private static String ROOT_DIR = "server/root";
+    private static byte[] buffer = new byte[1024];
 
     @FXML
     ListView<String> listView, listView2;
@@ -27,51 +37,56 @@ public class Controller implements Initializable {
     @FXML
     TextField input;
 
-    private static final byte[] buffer = new byte[1024];
-    private static final String APP_NAME = "client/Files/";
-    private static final String ROOT_DIR = "server/root/";
-
     private DataInputStream is;
     private DataOutputStream os;
 
-    public static List<String> list = new ArrayList<>();
-
     public void copy(ActionEvent actionEvent) throws Exception {
-        String msg = input.getText();
+        String fileName = input.getText();
         input.clear();
-        getSource(APP_NAME);
-        if (msg != null && msg.trim().length() != 0 /*&& !checkFilename(msg)*/) {
-            transfer(new File(APP_NAME + msg),
-                    new File(ROOT_DIR + "copy_" + msg));
+        sendFile(fileName);
+    }
+
+    private void sendFile(String fileName) throws IOException {
+        Path file = Paths.get(APP_DIR, fileName);
+        if (Files.exists(file)) {
+            long size = Files.size(file);
+
+            os.writeUTF(fileName);
+            os.writeLong(size);
+
+            InputStream fileStream = Files.newInputStream(file);
+            int read;
+            while ((read = fileStream.read(buffer)) != -1) {
+                os.write(buffer, 0, read);
+            }
+            os.flush();
         } else {
-            log.error("Error filename!!!");
-            Alert alert = new Alert(Alert.AlertType.ERROR, "Error filename!!!", ButtonType.OK);
-            alert.showAndWait();
+            os.writeUTF(fileName);
+            os.flush();
         }
-        os.writeUTF(msg);
-        os.flush();
     }
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         try {
+            fillFilesInCurrentDir(listView,APP_DIR);
+            fillFilesInCurrentDir(listView2,ROOT_DIR);
             Socket socket = new Socket("localhost", 8189);
             is = new DataInputStream(socket.getInputStream());
             os = new DataOutputStream(socket.getOutputStream());
-
-            listView.getItems().addAll(getSource(APP_NAME));
-
-            listView2.getItems().addAll(getSource(ROOT_DIR));
-
             Thread daemon = new Thread(() -> {
                 try {
                     while (true) {
                         String msg = is.readUTF();
                         log.debug("received: {}", msg);
-                        Platform.runLater(() -> listView.getItems().clear());
-                        Platform.runLater(() -> listView.getItems().addAll(getSource(APP_NAME)));
-                        Platform.runLater(() -> listView2.getItems().clear());
-                        Platform.runLater(() -> listView2.getItems().addAll(getSource(ROOT_DIR)));
+                        Platform.runLater(() -> input.setText(msg));
+                        Platform.runLater(() -> {
+                            try {
+                                fillFilesInCurrentDir(listView2,ROOT_DIR);
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        });
                     }
                 } catch (Exception e) {
                     log.error("exception while read from input stream");
@@ -84,44 +99,18 @@ public class Controller implements Initializable {
         }
     }
 
-    private void transfer(File src, File dst) {
-        try (FileInputStream is = new FileInputStream(src);
-             FileOutputStream os = new FileOutputStream(dst)
-        ) {
-            int read;
-            while ((read = is.read(buffer)) != -1) {
-                os.write(buffer, 0, read);
-                os.flush();
+    private void fillFilesInCurrentDir(ListView<String> list, String dir) throws IOException {
+        list.getItems().clear();
+        list.getItems().addAll(
+                Files.list(Paths.get(dir))
+                        .map(p -> p.getFileName().toString())
+                        .collect(Collectors.toList())
+        );
+        list.setOnMouseClicked(e -> {
+            if (e.getClickCount() == 2) {
+                String item = list.getSelectionModel().getSelectedItem();
+                input.setText(item);
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    public static List<String> getSource(String path) {
-        list.clear();
-        try {
-            File folder = new File(path);
-            String[] files = folder.list();
-            for (String fileName : files) {
-                list.add(fileName);
-            }
-        } catch (NullPointerException e) {
-            System.out.println("Ошибка" + e.getMessage());
-        }
-        return list;
-    }
-
-
-    //Проверка на существование файла
-    public static boolean checkFilename(String msg) {
-        File folder = new File(APP_NAME);
-        String[] files = folder.list();
-        for (String fileName : files) {
-            if (msg == fileName) {
-                return true;
-            }
-        }
-        return false;
+        });
     }
 }
